@@ -1,0 +1,553 @@
+<meta charset="utf-8">
+<title>Bubble Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;800&display=swap">
+<style>
+  /* Layout: one rounded toy body, centered. Top row = ⌫ bar · oval screen · C bar, then a 4×4 grid of round glossy keys. */
+  :root {
+    --page: #E6E9F7;          /* periwinkle mist */
+    --page-dot: #D5DAF0;
+    --shell: #FFF5DC;         /* butter cream body */
+    --shell-hi: #FFFBEF;
+    --shell-lo: #FBEDCB;
+    --shell-rim: #EED9A8;
+    --shadow: rgba(92, 72, 120, .2);
+    --gloss: rgba(255, 255, 255, .85);
+    --gloss-none: rgba(255, 255, 255, 0);
+    --screen: #D9F2E4;        /* mint LCD */
+    --screen-hi: #ECFAF2;
+    --screen-edge: #BFE2CF;
+    --screen-ink: #234A40;
+    --screen-ink-soft: #55796D;
+    --screen-shade: rgba(35, 74, 64, .2);
+    --ink: #4A3552;           /* plum key labels */
+    --ink-soft: #6F5D77;
+    --brand: #C2647F;
+    --digit: #FFCDB6; --digit-base: #E8A386;
+    --op:    #D4C6F7; --op-base:    #A693DC;
+    --eq:    #FFAFC2; --eq-base:    #E47F98;
+    --del:   #BFE0F7; --del-base:   #8BBCDD;
+    --clr:   #FFD89E; --clr-base:   #E1AC5C;
+    --focus: #6B4FD8;
+    --font-key: "Fredoka", "Nunito", ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+    --font-screen: "Nunito", ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+    color-scheme: light;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { height: 100%; }
+  body {
+    min-height: 100%;
+    background-color: var(--page);
+    background-image: radial-gradient(var(--page-dot) 1.6px, transparent 1.7px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: var(--font-key);
+    display: grid;
+    place-items: center;
+    padding-block: 28px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+
+  .wrap {
+    width: min(100%, 360px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+
+  /* ---------- Body ---------- */
+  .calc {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 20px 28px;
+    border-radius: 46px;
+    background: linear-gradient(180deg, var(--shell-hi) 0%, var(--shell) 35%, var(--shell-lo) 100%);
+    box-shadow:
+      inset 0 2px 0 var(--gloss),
+      inset 0 -7px 0 var(--shell-rim),
+      0 22px 44px var(--shadow),
+      0 4px 10px var(--shadow);
+  }
+
+  .top {
+    display: grid;
+    grid-template-columns: clamp(40px, 15%, 54px) 1fr clamp(40px, 15%, 54px);
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  /* ---------- Oval screen ---------- */
+  .screen {
+    width: 100%;              /* fill the middle column; aspect-ratio alone shrinks it to its text */
+    min-width: 0;
+    aspect-ratio: 1.5;
+    max-width: 100%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 30%, var(--screen-hi) 0%, var(--screen) 70%);
+    box-shadow:
+      0 0 0 6px var(--screen-edge),
+      inset 0 6px 12px var(--screen-shade),
+      inset 0 -3px 0 var(--gloss);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    padding: 0 15%;
+    color: var(--screen-ink);
+    font-family: var(--font-screen);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    overflow: hidden;
+  }
+  .expr {
+    width: 100%;
+    min-height: 1.35em;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--screen-ink-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;           /* keep the newest part visible when long */
+    unicode-bidi: plaintext;
+  }
+  .result {
+    width: 100%;
+    font-size: 40px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .result.is-error { font-weight: 600; letter-spacing: 0; }
+
+  /* ---------- Maker's label ---------- */
+  .label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 6px;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--brand);
+    letter-spacing: 0.02em;
+  }
+  .spec {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+  }
+
+  /* ---------- Glossy toy keys ---------- */
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .key {
+    --c: var(--digit);
+    --b: var(--digit-base);
+    position: relative;
+    aspect-ratio: 1;
+    max-width: 100%;
+    border: 0;
+    border-radius: 50%;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font: 600 clamp(20px, 7vw, 27px)/1 var(--font-key);
+    color: var(--ink);
+    background-color: var(--c);
+    background-image: radial-gradient(120% 120% at 50% 15%,
+      color-mix(in srgb, var(--c) 55%, white) 0%,
+      var(--c) 50%,
+      color-mix(in srgb, var(--c) 80%, var(--b)) 100%);
+    box-shadow:
+      0 6px 0 var(--b),
+      0 11px 16px var(--shadow),
+      inset 0 -4px 8px color-mix(in srgb, var(--b) 50%, transparent);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      transform .24s cubic-bezier(.34, 1.9, .6, 1),
+      box-shadow .2s ease;
+  }
+  .key::before {              /* the shine */
+    content: "";
+    position: absolute;
+    left: 22%; right: 22%; top: 8%;
+    height: 32%;
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--gloss), var(--gloss-none));
+    pointer-events: none;
+  }
+  .key > span, .key > svg { position: relative; }
+  .key:active, .key.pressed {
+    transform: translateY(5px) scale(.95, .93);
+    box-shadow:
+      0 1px 0 var(--b),
+      0 3px 6px var(--shadow),
+      inset 0 -2px 6px color-mix(in srgb, var(--b) 50%, transparent);
+    transition-duration: .05s;
+  }
+  .key:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
+
+  .key.op  { --c: var(--op);  --b: var(--op-base);  font-size: clamp(22px, 7.6vw, 30px); }
+  .key.eq  { --c: var(--eq);  --b: var(--eq-base);  font-size: clamp(22px, 7.6vw, 30px); }
+  .key.del { --c: var(--del); --b: var(--del-base); }
+  .key.clr { --c: var(--clr); --b: var(--clr-base); }
+
+  .key.bar {
+    aspect-ratio: auto;
+    height: 100%;
+    border-radius: 999px;
+  }
+  .key.bar::before { left: 20%; right: 20%; top: 5%; height: 24%; }
+
+  /* ---------- Footer ---------- */
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+  kbd {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 1px 6px;
+    border-radius: 7px;
+    background: var(--shell);
+    box-shadow: 0 2px 0 var(--shell-rim);
+    font: 600 12px/1.4 var(--font-key);
+    color: var(--ink);
+  }
+  .sound {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: var(--shell);
+    box-shadow: 0 3px 0 var(--shell-rim);
+    color: var(--ink);
+    font: 600 13px/1 var(--font-key);
+    cursor: pointer;
+  }
+  .sound:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--shell-rim); }
+  .sound:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .sound[aria-pressed="false"] .wave { display: none; }
+
+  @media (hover: none) and (pointer: coarse) {
+    .kbd-hint { display: none; }   /* no keyboard on phones */
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .key, .key:active, .key.pressed { transition: none; }
+  }
+</style>
+
+<main class="wrap">
+  <h1 class="sr-only">Bubble Calculator</h1>
+
+  <div class="calc">
+    <div class="top">
+      <button class="key bar del" type="button" id="key-del" data-key="del" aria-label="Delete last digit">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+          <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+          <path d="M12 9.5l5 5M17 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="screen" id="screen">
+        <div class="expr" id="expr">128 × 4 =</div>
+        <div class="result" id="result" aria-live="polite">512</div>
+      </div>
+
+      <button class="key bar clr" type="button" id="key-clr" data-key="clr" aria-label="Clear"><span>C</span></button>
+    </div>
+
+    <div class="label" aria-hidden="true">
+      <span class="brand">bubble</span>
+      <span class="spec">12-digit</span>
+    </div>
+
+    <div class="keys">
+      <button class="key" type="button" id="key-1" data-key="1"><span>1</span></button>
+      <button class="key" type="button" id="key-2" data-key="2"><span>2</span></button>
+      <button class="key" type="button" id="key-3" data-key="3"><span>3</span></button>
+      <button class="key op" type="button" id="key-div" data-key="÷" aria-label="Divide"><span>÷</span></button>
+
+      <button class="key" type="button" id="key-4" data-key="4"><span>4</span></button>
+      <button class="key" type="button" id="key-5" data-key="5"><span>5</span></button>
+      <button class="key" type="button" id="key-6" data-key="6"><span>6</span></button>
+      <button class="key op" type="button" id="key-mul" data-key="×" aria-label="Multiply"><span>×</span></button>
+
+      <button class="key" type="button" id="key-7" data-key="7"><span>7</span></button>
+      <button class="key" type="button" id="key-8" data-key="8"><span>8</span></button>
+      <button class="key" type="button" id="key-9" data-key="9"><span>9</span></button>
+      <button class="key op" type="button" id="key-sub" data-key="−" aria-label="Minus"><span>−</span></button>
+
+      <button class="key" type="button" id="key-0" data-key="0"><span>0</span></button>
+      <button class="key" type="button" id="key-dot" data-key="." aria-label="Decimal point"><span>.</span></button>
+      <button class="key eq" type="button" id="key-eq" data-key="=" aria-label="Equals"><span>=</span></button>
+      <button class="key op" type="button" id="key-add" data-key="+" aria-label="Plus"><span>+</span></button>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="kbd-hint">Keyboard works too: <kbd>Enter</kbd> equals, <kbd>Backspace</kbd> deletes, <kbd>Esc</kbd> clears</span>
+    <button class="sound" type="button" id="sound" aria-pressed="true">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="currentColor"/>
+        <path class="wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span id="sound-label">Sound on</span>
+    </button>
+  </div>
+</main>
+
+<script>
+(() => {
+  const resultEl = document.getElementById('result');
+  const exprEl = document.getElementById('expr');
+  const screenEl = document.getElementById('screen');
+  const soundBtn = document.getElementById('sound');
+  const soundLabel = document.getElementById('sound-label');
+
+  const MAX_DIGITS = 12;
+  const OPS = new Set(['+', '−', '×', '÷']);
+
+  // Opens on a finished sample sum so the screen shows both lines.
+  let tokens = [];            // e.g. ['12', '+', '7', '×']
+  let entry = '512';          // the number being typed ('' right after an operator)
+  let done = true;            // true right after "="
+  let doneExpr = '128 × 4 =';
+  let error = '';
+
+  function reset() {
+    tokens = []; entry = '0'; done = false; doneExpr = ''; error = '';
+  }
+
+  const digitCount = s => s.replace(/[^0-9]/g, '').length;
+
+  // "1234567.5" -> "1,234,567.5" (keeps a trailing "." or zeros while typing)
+  function group(s) {
+    const neg = s.startsWith('-');
+    if (neg) s = s.slice(1);
+    const [int, frac] = s.split('.');
+    const g = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (neg ? '−' : '') + g + (frac !== undefined ? '.' + frac : '');
+  }
+
+  function formatNum(v) {
+    const n = Number(v);
+    const a = Math.abs(n);
+    if (a !== 0 && (a >= 1e12 || a < 1e-6)) {
+      return n.toExponential(6).replace(/\.?0+e/, 'e').replace('e+', 'e').replace('-', '−');
+    }
+    return group(String(parseFloat(n.toPrecision(12))));
+  }
+
+  // Multiply and divide first, then add and subtract.
+  function evaluate(parts) {
+    const nums = [parseFloat(parts[0])];
+    const ops = [];
+    for (let i = 1; i < parts.length; i += 2) {
+      const op = parts[i];
+      const n = parseFloat(parts[i + 1]);
+      if (op === '×') nums[nums.length - 1] *= n;
+      else if (op === '÷') {
+        if (n === 0) throw new Error('Can’t ÷ by 0');
+        nums[nums.length - 1] /= n;
+      } else { ops.push(op); nums.push(n); }
+    }
+    let r = nums[0];
+    ops.forEach((op, i) => { r = op === '+' ? r + nums[i + 1] : r - nums[i + 1]; });
+    if (!isFinite(r)) throw new Error('Too big');
+    return parseFloat(r.toPrecision(12)) || 0;
+  }
+
+  function digit(d) {
+    if (error || done) { reset(); tokens = []; }
+    if (entry === '0') entry = d;
+    else if (digitCount(entry) < MAX_DIGITS) entry += d;
+  }
+
+  function dot() {
+    if (error || done) reset();
+    if (entry === '') entry = '0';
+    if (!entry.includes('.')) entry += '.';
+  }
+
+  function op(o) {
+    if (error) reset();
+    if (done) { done = false; doneExpr = ''; tokens = []; }
+    if (entry === '') { tokens[tokens.length - 1] = o; return; }
+    tokens.push(String(parseFloat(entry)), o);
+    entry = '';
+  }
+
+  function equals() {
+    if (error || done) return;
+    const parts = tokens.slice();
+    if (entry !== '') parts.push(String(parseFloat(entry)));
+    else parts.pop();
+    if (parts.length < 3) return;
+    const expr = parts.map(p => OPS.has(p) ? p : formatNum(p)).join(' ') + ' =';
+    try {
+      entry = String(evaluate(parts));
+    } catch (e) {
+      error = e.message;
+      entry = '0';
+    }
+    tokens = []; done = true; doneExpr = expr;
+  }
+
+  function del() {
+    if (error) { reset(); return; }
+    if (done) {
+      // Keep the answer so it can be edited, if it is a plain number.
+      done = false; doneExpr = '';
+      if (/e/.test(entry) || digitCount(entry) > MAX_DIGITS) entry = '0';
+      return;
+    }
+    if (entry !== '') {
+      entry = entry.slice(0, -1);
+      if (entry === '' || entry === '-') entry = tokens.length ? '' : '0';
+    } else if (tokens.length) {
+      tokens.pop();
+      entry = tokens.pop();
+    }
+  }
+
+  function render() {
+    exprEl.textContent = (error || done)
+      ? doneExpr
+      : tokens.map(t => OPS.has(t) ? t : formatNum(t)).join(' ');
+    resultEl.textContent = error
+      || (entry !== '' ? (done ? formatNum(entry) : group(entry)) : formatNum(tokens[tokens.length - 2]));
+    resultEl.classList.toggle('is-error', !!error);
+    fit();
+  }
+
+  // Shrink the big number until it fits inside the oval.
+  function fit() {
+    let size = Math.min(44, screenEl.clientWidth * 0.22);
+    resultEl.style.fontSize = size + 'px';
+    while (resultEl.scrollWidth > resultEl.clientWidth && size > 12) {
+      size -= 1;
+      resultEl.style.fontSize = size + 'px';
+    }
+  }
+
+  function press(key) {
+    if (/^[0-9]$/.test(key)) digit(key);
+    else if (key === '.') dot();
+    else if (OPS.has(key)) op(key);
+    else if (key === '=') equals();
+    else if (key === 'del') del();
+    else if (key === 'clr') reset();
+    render();
+  }
+
+  /* ---------- Click sound ---------- */
+  let soundOn = true;
+  try { soundOn = localStorage.getItem('bubble-sound') !== 'off'; } catch (e) {}
+  let audio = null;
+  const PITCH = { digit: 640, op: 520, eq: 780, del: 440, clr: 380 };
+  const kindOf = key =>
+    /^[0-9.]$/.test(key) ? 'digit' : OPS.has(key) ? 'op' : key === '=' ? 'eq' : key;
+
+  function pop(kind) {
+    if (!soundOn) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      const t = audio.currentTime;
+      const f = PITCH[kind] || 600;
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f * 1.7, t);
+      osc.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.2, t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + 0.1);
+    } catch (e) {}
+  }
+
+  function syncSound() {
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+    soundLabel.textContent = soundOn ? 'Sound on' : 'Sound off';
+  }
+  soundBtn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem('bubble-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    syncSound();
+    pop('digit');
+  });
+
+  /* ---------- Input ---------- */
+  document.querySelector('.calc').addEventListener('click', e => {
+    const btn = e.target.closest('[data-key]');
+    if (!btn) return;
+    pop(kindOf(btn.dataset.key));
+    press(btn.dataset.key);
+  });
+
+  const KEYMAP = {
+    '+': '+', '-': '−', '*': '×', 'x': '×', 'X': '×', '/': '÷',
+    '.': '.', ',': '.', '=': '=', 'Enter': '=',
+    'Backspace': 'del', 'Escape': 'clr', 'Delete': 'clr', 'c': 'clr', 'C': 'clr'
+  };
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const key = /^[0-9]$/.test(e.key) ? e.key : KEYMAP[e.key];
+    if (!key) return;
+    e.preventDefault();
+    const btn = document.querySelector('[data-key="' + key + '"]');
+    if (btn) {
+      btn.classList.add('pressed');
+      clearTimeout(btn._t);
+      btn._t = setTimeout(() => btn.classList.remove('pressed'), 110);
+    }
+    pop(kindOf(key));
+    press(key);
+  });
+
+  window.addEventListener('resize', fit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  syncSound();
+  render();
+})();
+</script>
